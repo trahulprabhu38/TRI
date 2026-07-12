@@ -2,26 +2,85 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"strings"
+	"sync"
 
 	"garmin-analyzer/internal/data"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Handler wires HTTP routes to the data store.
+// Handler wires HTTP routes to per-user data stores (falling back to the shared sample).
 type Handler struct {
-	Store *data.Store
+	Store      *data.Store // shared sample fallback
+	mu         sync.Mutex
+	userStores map[string]*data.Store
 }
 
-func New(store *data.Store) *Handler { return &Handler{Store: store} }
+func New(store *data.Store) *Handler {
+	return &Handler{Store: store, userStores: map[string]*data.Store{}}
+}
+
+// storeFor returns the user's own Garmin store if they've uploaded data, else the sample.
+func (h *Handler) storeFor(sub string) *data.Store {
+	if sub == "" || !hasJSON(Users.GarminDir(sub)) {
+		return h.Store
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if s := h.userStores[sub]; s != nil {
+		return s
+	}
+	s := data.NewStore(Users.GarminDir(sub))
+	h.userStores[sub] = s
+	return s
+}
+
+// reloadUser rebuilds a user's store after new files are uploaded.
+func (h *Handler) reloadUser(sub string) {
+	s := data.NewStore(Users.GarminDir(sub))
+	_, _ = s.Reload()
+	h.mu.Lock()
+	h.userStores[sub] = s
+	h.mu.Unlock()
+}
 
 func (h *Handler) bundle(c *gin.Context) (*data.Bundle, bool) {
-	b, err := h.Store.Bundle()
+	b, err := h.storeFor(c.GetString("uid")).Bundle()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return nil, false
 	}
 	return b, true
+}
+
+// hasJSON reports whether a directory contains at least one .json file.
+func hasJSON(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".json") {
+			return true
+		}
+	}
+	return false
+}
+
+func countJSON(dir string) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".json") {
+			n++
+		}
+	}
+	return n
 }
 
 // Health is a simple liveness probe.

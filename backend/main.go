@@ -62,6 +62,10 @@ func main() {
 		p.GET("/readiness", h.Readiness)
 		p.GET("/sleep", h.Sleep)
 
+		p.GET("/garmin/status", h.GarminStatus)
+		p.POST("/garmin/upload", h.GarminUpload)
+		p.POST("/garmin/clear", h.GarminClear)
+
 		p.GET("/races", h.ListRaces)
 		p.GET("/races/compare", h.CompareRaces)
 		p.POST("/races/upload", h.UploadRace)

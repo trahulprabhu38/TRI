@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tri-cm
+  namespace: tri
+data:
+  GOOGLE_CLIENT_ID: 1083733553694-lcm9ggcosfokmq64kr7l3bh28rp3hgdl.apps.googleusercontent.com
+  FRONTEND_URL: http://localhost:5173
+  STRAVA_REDIRECT_URI: http://localhost:8080/api/strava/callback
+  # OPENAI_MODEL: OPENAI_MODEL

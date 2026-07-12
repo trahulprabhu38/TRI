@@ -15,6 +15,8 @@ async function req(path, options = {}) {
 const get = (path) => req(path)
 const post = (path, body) =>
   req(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+// Multipart upload — let the browser set the Content-Type boundary.
+const upload = (path, formData) => req(path, { method: 'POST', body: formData })
 
 export const api = {
   // auth
@@ -22,6 +24,10 @@ export const api = {
   me: () => get('/auth/me'),
   googleLogin: (credential) => post('/auth/google', { credential }),
   logout: () => post('/auth/logout', {}),
+  // garmin data
+  garminStatus: () => get('/garmin/status'),
+  garminUpload: (formData) => upload('/garmin/upload', formData),
+  garminClear: () => post('/garmin/clear', {}),
   // strava credentials
   stravaCredentials: () => get('/strava/credentials'),
   saveStravaCredentials: (clientId, clientSecret) => post('/strava/credentials', { clientId, clientSecret }),

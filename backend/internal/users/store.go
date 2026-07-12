@@ -48,6 +48,13 @@ func (s *Store) RacesDir(sub string) string {
 	return d
 }
 
+// GarminDir returns (and creates) the user's Garmin export directory.
+func (s *Store) GarminDir(sub string) string {
+	d := filepath.Join(s.dir(sub), "garmin")
+	_ = os.MkdirAll(d, 0o755)
+	return d
+}
+
 // StravaTokenPath returns the path to the user's stored Strava token.
 func (s *Store) StravaTokenPath(sub string) string {
 	s.ensure(sub)

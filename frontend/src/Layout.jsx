@@ -11,10 +11,12 @@ const NAV = [
   { to: '/physiology', label: 'Physiology', icon: '❤️' },
   { to: '/training-load', label: 'Training Load', icon: '⚡' },
   { to: '/sleep', label: 'Sleep & Recovery', icon: '😴' },
+  { to: '/garmin-trends', label: 'Garmin Trends', icon: '📊' },
   { section: 'Coaching' },
   { to: '/coach', label: 'AI Coach', icon: '✨' },
   { section: 'Data' },
   { to: '/connect', label: 'Connect Strava', icon: '🔗' },
+  { to: '/garmin', label: 'Garmin Connect', icon: '⌚' },
 ]
 
 const TITLES = {
@@ -25,8 +27,10 @@ const TITLES = {
   '/physiology': ['Physiology', 'VO₂ max, HRV, heart rate, cadence and more'],
   '/training-load': ['Training Load', 'Acute vs chronic load, ACWR and readiness'],
   '/sleep': ['Sleep & Recovery', 'Sleep quality, stages, and hydration'],
+  '/garmin-trends': ['Garmin Trends', 'Deep breakdown of every Garmin metric'],
   '/coach': ['AI Coach', 'Personalized analysis and training plans'],
   '/connect': ['Connect Strava', 'Sync your Garmin activities via Strava'],
+  '/garmin': ['Garmin Connect', 'Upload your Garmin export to power your metrics'],
 }
 
 export default function Layout({ children }) {

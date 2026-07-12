@@ -9,6 +9,8 @@ import Sleep from './pages/Sleep'
 import RaceAnalysis from './pages/RaceAnalysis'
 import AICoach from './pages/AICoach'
 import Connect from './pages/Connect'
+import GarminConnect from './pages/GarminConnect'
+import GarminTrends from './pages/GarminTrends'
 import Maps from './pages/Maps'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
@@ -54,8 +56,10 @@ function AppShell() {
         <Route path="/physiology" element={<Physiology />} />
         <Route path="/training-load" element={<TrainingLoad />} />
         <Route path="/sleep" element={<Sleep />} />
+        <Route path="/garmin-trends" element={<GarminTrends />} />
         <Route path="/coach" element={<AICoach />} />
         <Route path="/connect" element={<Connect />} />
+        <Route path="/garmin" element={<GarminConnect />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

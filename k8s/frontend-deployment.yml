@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: tri-frontend
+    role: frontend
+  name: tri-frontend
+  namespace: tri
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tri-frontend
+      role: frontend
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: tri-frontend
+        role: frontend
+    spec:
+      containers:
+      - image: trahulprabhu38/tri-frontend:v0.1
+        name: tri-frontend
+        port: 80
+        resources:
+          requests:
+            cpu: 64m
+            memory: 100Mi
+          limits:
+            cpu: 128m
+            memory: 200Mi
+status: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: tri-frontend-svc
+  name: tri-frontend-svc
+  namespace: tri
+spec:
+  selector:
+    app: tri-frontend
+  type: NodePort
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
+

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: tri-backend
+    role: backend
+  name: tri-backend
+  namespace: tri
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tri-backend
+      role: backend
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: tri-backend
+        role: backend
+    spec:
+      containers:
+      - image: trahulprabhu38/tri-backend:v0.1
+        name: tri-backend
+        port: 8080
+        resources:
+          requests:
+            cpu: 64m
+            memory: 100Mi
+          limits:
+            cpu: 128m
+            memory: 200Mi
+status: {}
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: tri-backend
+  name: backend
+  namespace: tri
+spec:
+  ports:
+  - name: 8080-8080
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: tri-backend
+  type: ClusterIP
+status:
+  loadBalancer: {}
