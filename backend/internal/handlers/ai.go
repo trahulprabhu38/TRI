@@ -54,7 +54,7 @@ func (h *Handler) AIInsights(c *gin.Context) {
 		"**4-Week Plan** (weekly bullet points), and **Race-Day Projection**. " +
 		"Keep it practical and encouraging but honest."
 
-	user := buildDataSummary(b, req, loadRaces(h.racesDir(c)))
+	user := buildDataSummary(b, req, h.userRaces(c))
 
 	out, err := client.Complete(c.Request.Context(), system, user)
 	if err != nil {

@@ -6,6 +6,10 @@ services:
       GARMIN_DATA_DIR: /data
       UPLOAD_DIR: /app/uploads
       PORT: "8080"
+      # Persistence + cache.
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017}
+      MONGO_DB: ${MONGO_DB:-garmin}
+      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
       # Optional: set in a .env file next to this compose file.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
@@ -14,14 +18,19 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-1083733553694-lcm9ggcosfokmq64kr7l3bh28rp3hgdl.apps.googleusercontent.com}
       # Optional: fixed session-signing secret (auto-generated & persisted if empty).
       SESSION_SECRET: ${SESSION_SECRET:-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}
-      # Strava keys are now per-user (entered during onboarding), no longer set here.
+      # Strava keys are per-user (entered during onboarding), not set here.
       STRAVA_REDIRECT_URI: ${STRAVA_REDIRECT_URI:-http://localhost:8080/api/strava/callback}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     volumes:
-      - ./json:/data:ro          # your Garmin export (read-only)
-      - tri-uploads:/app/uploads  # uploaded races persist here
+      - ./json:/data:ro           # sample Garmin export (read-only)
+      - tri-uploads:/app/uploads   # per-user Garmin files + session secret
     ports:
       - "8080:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -33,5 +42,33 @@ services:
       - "5173:80"
     restart: unless-stopped
 
+  mongo:
+    image: mongo:7
+    container_name: tri-mongo
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: tri-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   tri-uploads:
+  mongo-data:
+  redis-data:

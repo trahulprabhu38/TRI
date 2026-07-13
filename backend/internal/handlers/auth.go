@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"os"
 	"time"
 
 	"garmin-analyzer/internal/auth"
@@ -59,12 +58,12 @@ func (h *Handler) GoogleLogin(c *gin.Context) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	p, e := Users.LoadProfile(claims.Sub)
+	p, e := h.Repo.GetProfile(claims.Sub)
 	if e != nil {
 		p = &users.Profile{Sub: claims.Sub, CreatedAt: now}
 	}
 	p.Email, p.Name, p.Picture, p.LastLogin = claims.Email, claims.Name, claims.Picture, now
-	_ = Users.SaveProfile(p)
+	_ = h.Repo.UpsertProfile(p)
 
 	sess := auth.Session{
 		Sub: claims.Sub, Email: claims.Email, Name: claims.Name, Picture: claims.Picture,
@@ -80,13 +79,13 @@ func (h *Handler) GoogleLogin(c *gin.Context) {
 // Me returns the current user plus onboarding status.
 func (h *Handler) Me(c *gin.Context) {
 	sub := c.GetString("uid")
-	p, err := Users.LoadProfile(sub)
+	p, err := h.Repo.GetProfile(sub)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no profile"})
 		return
 	}
-	creds, _ := Users.LoadStravaCreds(sub)
-	_, tokErr := os.Stat(Users.StravaTokenPath(sub))
+	creds, _ := h.Repo.GetStravaCreds(sub)
+	_, tokErr := h.Repo.GetStravaToken(sub)
 	c.JSON(http.StatusOK, gin.H{
 		"user":             userView(p),
 		"stravaConfigured": creds != nil && creds.ClientID != "",

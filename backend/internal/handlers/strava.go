@@ -2,11 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -26,33 +23,16 @@ var (
 
 // stravaClientFor builds a Strava client from the user's stored credentials.
 func (h *Handler) stravaClientFor(sub string) (*strava.Client, error) {
-	creds, err := Users.LoadStravaCreds(sub)
+	creds, err := h.Repo.GetStravaCreds(sub)
 	if err != nil || creds.ClientID == "" || creds.ClientSecret == "" {
 		return nil, errors.New("strava credentials not set")
 	}
 	return strava.New(creds.ClientID, creds.ClientSecret), nil
 }
 
-func saveUserToken(sub string, t *strava.Token) error {
-	b, _ := json.MarshalIndent(t, "", "  ")
-	return os.WriteFile(Users.StravaTokenPath(sub), b, 0o600)
-}
-
-func loadUserToken(sub string) (*strava.Token, error) {
-	b, err := os.ReadFile(Users.StravaTokenPath(sub))
-	if err != nil {
-		return nil, err
-	}
-	var t strava.Token
-	if err := json.Unmarshal(b, &t); err != nil {
-		return nil, err
-	}
-	return &t, nil
-}
-
 // GetStravaCredentials returns the saved client ID (never the secret).
 func (h *Handler) GetStravaCredentials(c *gin.Context) {
-	creds, err := Users.LoadStravaCreds(c.GetString("uid"))
+	creds, err := h.Repo.GetStravaCreds(c.GetString("uid"))
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"clientId": "", "hasSecret": false})
 		return
@@ -60,7 +40,7 @@ func (h *Handler) GetStravaCredentials(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"clientId": creds.ClientID, "hasSecret": creds.ClientSecret != ""})
 }
 
-// SaveStravaCredentials persists the user's Strava app keys forever.
+// SaveStravaCredentials persists the user's Strava app keys.
 func (h *Handler) SaveStravaCredentials(c *gin.Context) {
 	var body users.StravaCreds
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -71,7 +51,7 @@ func (h *Handler) SaveStravaCredentials(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "client ID and secret are required"})
 		return
 	}
-	if err := Users.SaveStravaCreds(c.GetString("uid"), &body); err != nil {
+	if err := h.Repo.SaveStravaCreds(c.GetString("uid"), &body); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -81,11 +61,11 @@ func (h *Handler) SaveStravaCredentials(c *gin.Context) {
 // StravaStatus reports configured (keys saved) and connected (token present).
 func (h *Handler) StravaStatus(c *gin.Context) {
 	sub := c.GetString("uid")
-	creds, _ := Users.LoadStravaCreds(sub)
-	_, tokErr := os.Stat(Users.StravaTokenPath(sub))
+	creds, _ := h.Repo.GetStravaCreds(sub)
+	tok, tokErr := h.Repo.GetStravaToken(sub)
 	resp := gin.H{"configured": creds != nil && creds.ClientID != "", "connected": tokErr == nil}
-	if t, err := loadUserToken(sub); err == nil {
-		resp["athlete"] = strings.TrimSpace(t.Athlete.Firstname + " " + t.Athlete.Lastname)
+	if tokErr == nil {
+		resp["athlete"] = strings.TrimSpace(tok.Athlete.Firstname + " " + tok.Athlete.Lastname)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -102,7 +82,7 @@ func (h *Handler) StravaAuthURL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"url": client.AuthURL(StravaRedirect, state)})
 }
 
-// StravaCallback handles the OAuth redirect (no cookie — identity comes from signed state).
+// StravaCallback handles the OAuth redirect (identity via signed state).
 func (h *Handler) StravaCallback(c *gin.Context) {
 	code, state := c.Query("code"), c.Query("state")
 	var s auth.Session
@@ -120,11 +100,11 @@ func (h *Handler) StravaCallback(c *gin.Context) {
 		c.String(http.StatusBadGateway, "strava exchange failed: "+err.Error())
 		return
 	}
-	_ = saveUserToken(s.Sub, tok)
+	_ = h.Repo.SaveStravaToken(s.Sub, tok)
 	c.Redirect(http.StatusFound, FrontendURL+"/onboarding?strava=connected")
 }
 
-// StravaSync pulls the user's activities and stores them as their races.
+// StravaSync pulls the user's activities and stores them as races in the repo.
 func (h *Handler) StravaSync(c *gin.Context) {
 	sub := c.GetString("uid")
 	client, err := h.stravaClientFor(sub)
@@ -132,7 +112,7 @@ func (h *Handler) StravaSync(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Strava not configured."})
 		return
 	}
-	tok, err := loadUserToken(sub)
+	tok, err := h.Repo.GetStravaToken(sub)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Connect Strava first."})
 		return
@@ -144,7 +124,7 @@ func (h *Handler) StravaSync(c *gin.Context) {
 			return
 		}
 		refreshed.Athlete = tok.Athlete
-		_ = saveUserToken(sub, refreshed)
+		_ = h.Repo.SaveStravaToken(sub, refreshed)
 		tok = refreshed
 	}
 	acts, err := client.Activities(c.Request.Context(), tok.AccessToken, 200)
@@ -152,25 +132,23 @@ func (h *Handler) StravaSync(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	dir := Users.RacesDir(sub)
-	imported, skipped := 0, 0
+	var races []Race
+	skipped := 0
 	for _, a := range acts {
-		race, ok := activityToRace(a)
+		r, ok := activityToRace(a)
 		if !ok {
 			skipped++
 			continue
 		}
-		out, _ := json.MarshalIndent(race, "", "  ")
-		if os.WriteFile(filepath.Join(dir, "race_"+race.ID+".json"), out, 0o644) == nil {
-			imported++
-		}
+		races = append(races, r)
 	}
+	imported, _ := h.Repo.UpsertRaces(sub, races)
 	c.JSON(http.StatusOK, gin.H{"imported": imported, "skipped": skipped, "total": len(acts)})
 }
 
 // StravaDisconnect removes the user's stored token.
 func (h *Handler) StravaDisconnect(c *gin.Context) {
-	_ = os.Remove(Users.StravaTokenPath(c.GetString("uid")))
+	_ = h.Repo.DeleteStravaToken(c.GetString("uid"))
 	c.JSON(http.StatusOK, gin.H{"status": "disconnected"})
 }
 

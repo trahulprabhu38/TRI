@@ -20,7 +20,7 @@ func (h *Handler) AnalyzeRaces(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	all := loadRaces(h.racesDir(c))
+	all := h.userRaces(c)
 	sel := map[string]bool{}
 	for _, id := range req.IDs {
 		sel[id] = true

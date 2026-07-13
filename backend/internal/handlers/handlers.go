@@ -5,21 +5,29 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"garmin-analyzer/internal/data"
+	"garmin-analyzer/internal/model"
+	"garmin-analyzer/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
 
+// Race is the shared persisted race type.
+type Race = model.Race
+
 // Handler wires HTTP routes to per-user data stores (falling back to the shared sample).
 type Handler struct {
 	Store      *data.Store // shared sample fallback
+	Repo       store.Repo
+	Cache      store.Cache
 	mu         sync.Mutex
 	userStores map[string]*data.Store
 }
 
-func New(store *data.Store) *Handler {
-	return &Handler{Store: store, userStores: map[string]*data.Store{}}
+func New(sampleStore *data.Store, repo store.Repo, cache store.Cache) *Handler {
+	return &Handler{Store: sampleStore, Repo: repo, Cache: cache, userStores: map[string]*data.Store{}}
 }
 
 // storeFor returns the user's own Garmin store if they've uploaded data, else the sample.
@@ -37,22 +45,31 @@ func (h *Handler) storeFor(sub string) *data.Store {
 	return s
 }
 
-// reloadUser rebuilds a user's store after new files are uploaded.
+// reloadUser rebuilds a user's store and invalidates their cached bundle.
 func (h *Handler) reloadUser(sub string) {
 	s := data.NewStore(Users.GarminDir(sub))
 	_, _ = s.Reload()
 	h.mu.Lock()
 	h.userStores[sub] = s
 	h.mu.Unlock()
+	h.Cache.Del("bundle:" + sub)
 }
 
+// bundle returns the user's parsed Garmin metrics, served from Redis when warm.
 func (h *Handler) bundle(c *gin.Context) (*data.Bundle, bool) {
-	b, err := h.storeFor(c.GetString("uid")).Bundle()
+	sub := c.GetString("uid")
+	key := "bundle:" + sub
+	var cached data.Bundle
+	if h.Cache.Get(key, &cached) {
+		return &cached, true
+	}
+	built, err := h.storeFor(sub).Bundle()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return nil, false
 	}
-	return b, true
+	h.Cache.Set(key, built, 10*time.Minute)
+	return built, true
 }
 
 // hasJSON reports whether a directory contains at least one .json file.

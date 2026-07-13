@@ -10,6 +10,7 @@ import (
 
 	"garmin-analyzer/internal/data"
 	"garmin-analyzer/internal/handlers"
+	"garmin-analyzer/internal/store"
 	"garmin-analyzer/internal/users"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,8 @@ func main() {
 	port := getenv("PORT", "8080")
 	baseDir := getenv("UPLOAD_DIR", "uploads")
 
-	store := data.NewStore(dataDir)
-	if _, err := store.Reload(); err != nil {
+	sampleStore := data.NewStore(dataDir)
+	if _, err := sampleStore.Reload(); err != nil {
 		log.Fatalf("failed to load data from %s: %v", dataDir, err)
 	}
 	log.Printf("loaded Garmin data from %s", dataDir)
@@ -33,10 +34,40 @@ func main() {
 	handlers.StravaRedirect = getenv("STRAVA_REDIRECT_URI", "http://localhost:8080/api/strava/callback")
 	handlers.FrontendURL = getenv("FRONTEND_URL", "http://localhost:5173")
 
-	h := handlers.New(store)
+	// Persistence: MongoDB when configured, else filesystem.
+	var repo store.Repo
+	if uri := os.Getenv("MONGO_URI"); uri != "" {
+		m, err := store.NewMongo(uri, getenv("MONGO_DB", "garmin"))
+		if err != nil {
+			log.Fatalf("mongodb connection failed: %v", err)
+		}
+		repo = m
+		log.Printf("persistence: MongoDB (%s)", getenv("MONGO_DB", "garmin"))
+	} else {
+		repo = store.NewFileRepo(handlers.Users)
+		log.Printf("persistence: filesystem (set MONGO_URI to use MongoDB)")
+	}
+
+	// Cache: Redis when configured, else no-op.
+	var cache store.Cache = store.NoopCache{}
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+		r, err := store.NewRedis(addr)
+		if err != nil {
+			log.Fatalf("redis connection failed: %v", err)
+		}
+		cache = r
+		log.Printf("cache: Redis (%s)", addr)
+	} else {
+		log.Printf("cache: disabled (set REDIS_ADDR to enable Redis)")
+	}
+
+	h := handlers.New(sampleStore, repo, cache)
 
 	r := gin.Default()
 	r.Use(cors())
+
+	// Root-level health probe (for Kubernetes / load balancers).
+	r.GET("/health", h.Health)
 
 	api := r.Group("/api")
 

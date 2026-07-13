@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -12,28 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// racesDir returns the current user's races directory.
-func (h *Handler) racesDir(c *gin.Context) string {
-	return Users.RacesDir(c.GetString("uid"))
-}
-
-// Race is a normalized finished-race record parsed from an uploaded activity file.
-type Race struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Sport        string  `json:"sport"`
-	Date         string  `json:"date"`
-	DistanceKm   float64 `json:"distanceKm"`
-	DurationSec  float64 `json:"durationSec"`
-	AvgPaceSecKm float64 `json:"avgPaceSecKm"`
-	AvgHR        float64 `json:"avgHr"`
-	MaxHR        float64 `json:"maxHr"`
-	AvgCadence   float64 `json:"avgCadence"`
-	AvgPowerW    float64 `json:"avgPowerW"`
-	Calories     float64 `json:"calories"`
-	Elevation    float64 `json:"elevationGain"`
-	Polyline     string  `json:"polyline,omitempty"`
-	StartLatLng  []float64 `json:"startLatLng,omitempty"`
+// userRaces loads the current user's races from the repo.
+func (h *Handler) userRaces(c *gin.Context) []Race {
+	races, _ := h.Repo.ListRaces(c.GetString("uid"))
+	return races
 }
 
 // UploadRace accepts a raw JSON activity export, normalizes it, and stores it.
@@ -51,25 +30,23 @@ func (h *Handler) UploadRace(c *gin.Context) {
 		race.ID = time.Now().Format("20060102150405")
 	}
 
-	dir := h.racesDir(c)
-	out, _ := json.MarshalIndent(race, "", "  ")
-	path := filepath.Join(dir, "race_"+race.ID+".json")
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	sub := c.GetString("uid")
+	if err := h.Repo.SaveRace(sub, race); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"race": race, "comparison": compare(dir, race)})
+	all, _ := h.Repo.ListRaces(sub)
+	c.JSON(http.StatusOK, gin.H{"race": race, "comparison": compare(all, race)})
 }
 
-// ListRaces returns all previously uploaded races, newest first.
+// ListRaces returns all of the user's races, newest first.
 func (h *Handler) ListRaces(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"races": loadRaces(h.racesDir(c))})
+	c.JSON(http.StatusOK, gin.H{"races": h.userRaces(c)})
 }
 
-// CompareRaces returns the full set of uploaded races grouped for comparison.
+// CompareRaces returns the user's races grouped for comparison.
 func (h *Handler) CompareRaces(c *gin.Context) {
-	races := loadRaces(h.racesDir(c))
-	// Group by rounded distance bucket so like-for-like races compare.
+	races := h.userRaces(c)
 	groups := map[string][]Race{}
 	for _, r := range races {
 		key := bucketKey(r.Sport, r.DistanceKm)
@@ -79,8 +56,7 @@ func (h *Handler) CompareRaces(c *gin.Context) {
 }
 
 // compare positions a race against prior same-distance races of the same sport.
-func compare(dir string, r Race) gin.H {
-	all := loadRaces(dir)
+func compare(all []Race, r Race) gin.H {
 	var peers []Race
 	for _, p := range all {
 		if p.ID == r.ID {
@@ -118,29 +94,6 @@ func compare(dir string, r Race) gin.H {
 		"isPersonalRecord": isPR,
 		"peerCount":        len(peers),
 	}
-}
-
-func loadRaces(dir string) []Race {
-	var races []Race
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return races
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), "race_") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		var r Race
-		if json.Unmarshal(raw, &r) == nil {
-			races = append(races, r)
-		}
-	}
-	sort.Slice(races, func(i, j int) bool { return races[i].Date > races[j].Date })
-	return races
 }
 
 func sameDistance(a, b float64) bool {
