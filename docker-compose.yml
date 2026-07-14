@@ -10,6 +10,7 @@ services:
       MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017}
       MONGO_DB: ${MONGO_DB:-garmin}
       REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
+      GARMIN_SYNC_URL: ${GARMIN_SYNC_URL:-http://garmin-sync:8000}
       # Optional: set in a .env file next to this compose file.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
@@ -42,6 +43,15 @@ services:
       - "5173:80"
     restart: unless-stopped
 
+  garmin-sync:
+    build: ./garmin-sync
+    container_name: tri-garmin-sync
+    volumes:
+      - garmin-tokens:/tokens   # per-user Garmin session tokens (no passwords)
+    expose:
+      - "8000"
+    restart: unless-stopped
+
   mongo:
     image: mongo:7
     container_name: tri-mongo
@@ -72,3 +82,4 @@ volumes:
   tri-uploads:
   mongo-data:
   redis-data:
+  garmin-tokens:

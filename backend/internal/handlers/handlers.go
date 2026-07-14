@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -55,14 +56,26 @@ func (h *Handler) reloadUser(sub string) {
 	h.Cache.Del("bundle:" + sub)
 }
 
-// bundle returns the user's parsed Garmin metrics, served from Redis when warm.
+// bundle returns the user's Garmin metrics: Redis cache → live-synced bundle
+// (Mongo) → parsed uploaded files → shared sample.
 func (h *Handler) bundle(c *gin.Context) (*data.Bundle, bool) {
 	sub := c.GetString("uid")
 	key := "bundle:" + sub
+
 	var cached data.Bundle
 	if h.Cache.Get(key, &cached) {
 		return &cached, true
 	}
+
+	// Live-synced bundle from Garmin Connect takes precedence over uploads/sample.
+	if raw, err := h.Repo.GetBundle(sub); err == nil && len(raw) > 0 {
+		var b data.Bundle
+		if json.Unmarshal(raw, &b) == nil {
+			h.Cache.Set(key, &b, 10*time.Minute)
+			return &b, true
+		}
+	}
+
 	built, err := h.storeFor(sub).Bundle()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

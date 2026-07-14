@@ -1,6 +1,7 @@
 import {
   ResponsiveContainer, LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Cell,
 } from 'recharts'
 import { fmtDate } from './utils'
 
@@ -98,6 +99,46 @@ export function BarTS({ data, bars, xKey = 'date', valueFmt, stacked = true, hei
               fill={b.color} radius={stacked ? 0 : [3, 3, 0, 0]} maxBarSize={26} />
           ))}
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// Categorical bar chart (x = label, single value) for per-metric race comparison.
+export function CompareBars({ data, colors, valueFmt, height = 180 }) {
+  return (
+    <div style={{ width: '100%', height }}>
+      <ResponsiveContainer>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+          <CartesianGrid stroke={GRID} vertical={false} />
+          <XAxis dataKey="name" tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} interval={0} />
+          <YAxis tick={AXIS} tickLine={false} axisLine={false} width={44} />
+          <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+            formatter={(v) => [valueFmt ? valueFmt(v) : v, 'value']} labelFormatter={(l) => l} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={64}>
+            {data.map((d, i) => <Cell key={i} fill={(colors && colors[i]) || '#2f6fed'} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// Radar chart comparing several races across normalized (0–100%) metrics.
+export function RadarTS({ data, series, height = 320 }) {
+  return (
+    <div style={{ width: '100%', height }}>
+      <ResponsiveContainer>
+        <RadarChart data={data} outerRadius="72%">
+          <PolarGrid stroke={GRID} />
+          <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: '#5b6472' }} />
+          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+          {series.map((s) => (
+            <Radar key={s.key} name={s.name} dataKey={s.key} stroke={s.color} fill={s.color} fillOpacity={0.14} strokeWidth={2} />
+          ))}
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Tooltip formatter={(v) => `${Math.round(v)}%`} />
+        </RadarChart>
       </ResponsiveContainer>
     </div>
   )

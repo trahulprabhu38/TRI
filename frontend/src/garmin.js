@@ -61,10 +61,10 @@ export function classify(value, bands) {
   return bands.find((b) => value >= b.min && value < b.max) || bands[bands.length - 1]
 }
 
-// tone maps a band color to a badge class.
+// tone maps a band color to a Garmin-ramp badge class.
 export function bandTone(band) {
   if (!band) return 'neutral'
-  return { [C.green]: 'good', [C.blue]: 'accent', [C.amber]: 'warn', [C.red]: 'bad', [C.purple]: 'accent' }[band.color] || 'neutral'
+  return { [C.red]: 'poor', [C.amber]: 'fair', [C.green]: 'good', [C.blue]: 'excellent', [C.purple]: 'superior' }[band.color] || 'neutral'
 }
 
 // HRV status derived from the athlete's own baseline (mean ± spread).

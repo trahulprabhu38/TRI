@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
+import { SyncProvider, useSync } from './sync'
 import Layout from './Layout'
 import Dashboard from './pages/Dashboard'
 import RacePredictions from './pages/RacePredictions'
@@ -47,21 +48,31 @@ function Root() {
 
 function AppShell() {
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/maps" element={<Maps />} />
-        <Route path="/races" element={<RaceAnalysis />} />
-        <Route path="/predictions" element={<RacePredictions />} />
-        <Route path="/physiology" element={<Physiology />} />
-        <Route path="/training-load" element={<TrainingLoad />} />
-        <Route path="/sleep" element={<Sleep />} />
-        <Route path="/garmin-trends" element={<GarminTrends />} />
-        <Route path="/coach" element={<AICoach />} />
-        <Route path="/connect" element={<Connect />} />
-        <Route path="/garmin" element={<GarminConnect />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <SyncProvider>
+      <Layout>
+        <ShellRoutes />
+      </Layout>
+    </SyncProvider>
+  )
+}
+
+function ShellRoutes() {
+  const { version } = useSync()
+  // Keying on version remounts pages after a sync so every metric refetches.
+  return (
+    <Routes key={version}>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/maps" element={<Maps />} />
+      <Route path="/races" element={<RaceAnalysis />} />
+      <Route path="/predictions" element={<RacePredictions />} />
+      <Route path="/physiology" element={<Physiology />} />
+      <Route path="/training-load" element={<TrainingLoad />} />
+      <Route path="/sleep" element={<Sleep />} />
+      <Route path="/garmin-trends" element={<GarminTrends />} />
+      <Route path="/coach" element={<AICoach />} />
+      <Route path="/connect" element={<Connect />} />
+      <Route path="/garmin" element={<GarminConnect />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

@@ -3,8 +3,12 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useApi } from '../useApi'
 import { Card, Loading, ErrorState, Empty, TrendBadge, StatRow } from '../components'
-import { LineTS } from '../charts'
-import { fmtDur, fmtSportPace, fmtNum, SPORT_META, fmtDate, signed } from '../utils'
+import { LineTS, CompareBars, RadarTS } from '../charts'
+import { fmtDur, fmtSportPace, fmtNum, SPORT_META, fmtDate, signed, decodePolyline } from '../utils'
+import RouteMap from '../RouteMap'
+
+// Distinct colours per race in the comparison (Garmin-ish ramp).
+const RACE_COLORS = ['#2f6fed', '#7a4de0', '#0e9db6', '#c98a12']
 
 const SPORTS = ['running', 'cycling', 'swimming']
 const SPORT_WORDS = { swim: 'swimming', run: 'running', cycl: 'cycling', bike: 'cycling', ride: 'cycling' }
@@ -244,6 +248,8 @@ function AnalysisView({ a }) {
   const paceFmt = (v) => fmtSportPace(v, sport)
   const metrics = metricsFor(sport).filter((m) => races.some((r) => r[m.key] > 0))
   const base = races[0]
+  const color = (i) => RACE_COLORS[i % RACE_COLORS.length]
+  const shortName = (r, i) => `${i + 1}. ${r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name}`
 
   function cellClass(m, value, isFirst) {
     if (isFirst || !m.dir || !value || !base[m.key]) return ''
@@ -252,9 +258,52 @@ function AnalysisView({ a }) {
     return better ? 'good' : worse ? 'bad' : ''
   }
 
+  // Per-metric bar sets (only metrics with data).
+  const barMetrics = metrics.filter((m) => m.key !== 'avgPaceSecKm')
+  const decoded = races.map((r) => (r.polyline ? decodePolyline(r.polyline) : []))
+
+  // Radar: normalise each metric to % of the max among selected races.
+  const radarKeys = [
+    { key: 'distanceKm', label: 'Distance' },
+    { key: 'durationSec', label: 'Duration' },
+    { key: 'avgHr', label: 'Avg HR' },
+    { key: 'avgCadence', label: sport === 'swimming' ? 'Stroke rate' : 'Cadence' },
+    { key: 'avgPowerW', label: 'Power' },
+    { key: 'elevationGain', label: 'Elevation' },
+    { key: 'calories', label: 'Calories' },
+  ].filter((rk) => races.some((r) => r[rk.key] > 0))
+  const raceLabels = races.map((r, i) => shortName(r, i))
+  const radarData = radarKeys.map((rk) => {
+    const max = Math.max(...races.map((r) => r[rk.key] || 0)) || 1
+    const row = { metric: rk.label }
+    races.forEach((r, i) => { row[raceLabels[i]] = Math.round(((r[rk.key] || 0) / max) * 100) })
+    return row
+  })
+  const radarSeries = races.map((r, i) => ({ key: raceLabels[i], name: raceLabels[i], color: color(i) }))
+
   return (
     <>
       <div className="section-title">Comparison · {races.length} {SPORT_META[sport].label.toLowerCase()} races</div>
+
+      {/* Maps side by side */}
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${races.length}, 1fr)`, gap: 16, marginBottom: 20 }}>
+        {races.map((r, i) => (
+          <div key={r.id} className="card" style={{ overflow: 'hidden', borderTop: `3px solid ${color(i)}` }}>
+            {decoded[i].length > 1
+              ? <RouteMap points={decoded[i]} color={color(i)} height={170} />
+              : <div style={{ height: 170, display: 'grid', placeItems: 'center', background: 'var(--surface-2)', color: 'var(--text-3)', fontSize: 12 }}>No GPS route</div>}
+            <div className="card-pad" style={{ paddingTop: 12 }}>
+              <div className="spread">
+                <span className="badge neutral" style={{ color: color(i) }}>{i + 1}</span>
+                <span className="muted mono" style={{ fontSize: 12 }}>{fmtDate(r.date)}</span>
+              </div>
+              <div style={{ fontWeight: 600, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+              <div className="mono" style={{ fontSize: 18, marginTop: 4 }}>{fmtDur(r.durationSec)}</div>
+              <div className="muted mono" style={{ fontSize: 12 }}>{fmtNum(r.distanceKm, r.distanceKm < 2 ? 2 : 1)} km · {paceFmt(r.avgPaceSecKm)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
         <Card title="Fastest race">
@@ -323,7 +372,36 @@ function AnalysisView({ a }) {
         Green = improved vs your first selected race · red = regressed. The Change column compares first → last.
       </div>
 
-      <div className="grid grid-2" style={{ marginTop: 20 }}>
+      {/* Multi-metric radar */}
+      {radarKeys.length >= 3 && (
+        <>
+          <div className="section-title">Multi-metric overview</div>
+          <Card title="Race profiles" desc="Each metric scaled to the highest value among the selected races (100% = the biggest)">
+            <RadarTS data={radarData} series={radarSeries} />
+          </Card>
+        </>
+      )}
+
+      {/* Per-metric bar charts */}
+      <div className="section-title">Metric-by-metric</div>
+      <div className="grid grid-3">
+        {barMetrics.map((m) => {
+          const items = races.map((r, i) => ({ name: `${i + 1}`, value: r[m.key] || 0 }))
+          if (items.every((it) => it.value === 0)) return null
+          return (
+            <Card key={m.key} title={m.label}>
+              <CompareBars data={items} colors={races.map((_, i) => color(i))} valueFmt={m.fmt} />
+            </Card>
+          )
+        })}
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        Bars are numbered per race: {races.map((r, i) => `${i + 1} = ${r.name}`).join(' · ')}
+      </div>
+
+      {/* Trends over time */}
+      <div className="section-title">Over time</div>
+      <div className="grid grid-2">
         <Card title="Pace across races" desc="Lower is faster">
           <LineTS data={chartData} valueFmt={paceFmt} lines={[{ key: 'pace', name: 'Pace', color: SPORT_META[sport].color }]} />
         </Card>

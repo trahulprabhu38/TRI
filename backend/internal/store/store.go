@@ -24,6 +24,11 @@ type Repo interface {
 	SaveRace(sub string, r model.Race) error
 	UpsertRaces(sub string, rs []model.Race) (int, error)
 	ListRaces(sub string) ([]model.Race, error)
+
+	// SaveBundle/GetBundle persist a user's live-synced Garmin metrics bundle (raw JSON).
+	SaveBundle(sub string, raw []byte) error
+	GetBundle(sub string) ([]byte, error)
+	BundleUpdatedAt(sub string) (time.Time, error)
 }
 
 // Cache is a small JSON cache (Redis-backed, or a no-op).

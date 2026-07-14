@@ -33,6 +33,7 @@ func main() {
 	handlers.SessionSecret = sessionSecret(baseDir)
 	handlers.StravaRedirect = getenv("STRAVA_REDIRECT_URI", "http://localhost:8080/api/strava/callback")
 	handlers.FrontendURL = getenv("FRONTEND_URL", "http://localhost:5173")
+	handlers.GarminSyncURL = os.Getenv("GARMIN_SYNC_URL")
 
 	// Persistence: MongoDB when configured, else filesystem.
 	var repo store.Repo
@@ -93,9 +94,12 @@ func main() {
 		p.GET("/readiness", h.Readiness)
 		p.GET("/sleep", h.Sleep)
 
-		p.GET("/garmin/status", h.GarminStatus)
-		p.POST("/garmin/upload", h.GarminUpload)
-		p.POST("/garmin/clear", h.GarminClear)
+		p.GET("/garmin/connect/status", h.GarminConnectStatus)
+		p.POST("/garmin/connect/login", h.GarminConnectLogin)
+		p.POST("/garmin/connect/mfa", h.GarminConnectMFA)
+		p.POST("/garmin/connect/token", h.GarminConnectToken)
+		p.POST("/garmin/connect/sync", h.GarminConnectSync)
+		p.POST("/garmin/connect/disconnect", h.GarminConnectDisconnect)
 
 		p.GET("/races", h.ListRaces)
 		p.GET("/races/compare", h.CompareRaces)
@@ -153,6 +157,7 @@ func cors() gin.HandlerFunc {
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Cache-Control", "no-store") // metrics are per-request; never cache in the browser
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return

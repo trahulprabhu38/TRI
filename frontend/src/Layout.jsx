@@ -1,5 +1,31 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useSync, timeAgo } from './sync'
+
+function SyncControl() {
+  const s = useSync()
+  if (!s || !s.available) return null
+  const line = s.error
+    ? s.error
+    : !s.connected
+      ? 'Garmin not connected'
+      : s.lastSync
+        ? `Last synced ${timeAgo(s.lastSync)}`
+        : 'Not synced yet'
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <button
+        className="btn accent"
+        style={{ padding: '8px 16px' }}
+        disabled={s.syncing || !s.connected}
+        onClick={() => s.doSync().catch(() => {})}
+      >
+        {s.syncing ? 'Syncing…' : '↻ Sync'}
+      </button>
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{line}</div>
+    </div>
+  )
+}
 
 const NAV = [
   { section: 'Overview' },
@@ -88,7 +114,7 @@ export default function Layout({ children }) {
             <h1>{title}</h1>
             {sub && <div className="sub">{sub}</div>}
           </div>
-          <span className="badge neutral">Triathlon · Swim · Bike · Run</span>
+          <SyncControl />
         </header>
         <div className="content">{children}</div>
       </div>

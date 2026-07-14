@@ -125,6 +125,12 @@ h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; color: var(--text); 
 .badge.neutral { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
 .badge.accent { background: var(--accent-soft); color: var(--accent); }
 
+/* Garmin status ramp: poor → fair → good → excellent → superior */
+.badge.poor { background: #fdecec; color: #d64550; }
+.badge.fair { background: #fbf2df; color: #c98a12; }
+.badge.excellent { background: #eaf1ff; color: #2f6fed; }
+.badge.superior { background: #f1ebfc; color: #7a4de0; }
+
 /* ---------- Tables ---------- */
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.tbl th {

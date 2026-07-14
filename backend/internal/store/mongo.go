@@ -15,9 +15,10 @@ import (
 
 // Mongo is a MongoDB-backed Repo.
 type Mongo struct {
-	client *mongo.Client
-	users  *mongo.Collection
-	races  *mongo.Collection
+	client  *mongo.Client
+	users   *mongo.Collection
+	races   *mongo.Collection
+	bundles *mongo.Collection
 }
 
 // stravaDoc is the persisted Strava state embedded on a user document.
@@ -41,7 +42,7 @@ func NewMongo(uri, dbName string) (*Mongo, error) {
 		return nil, err
 	}
 	db := client.Database(dbName)
-	m := &Mongo{client: client, users: db.Collection("users"), races: db.Collection("races")}
+	m := &Mongo{client: client, users: db.Collection("users"), races: db.Collection("races"), bundles: db.Collection("bundles")}
 	// Unique race per user.
 	_, _ = m.races.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "sub", Value: 1}, {Key: "raceId", Value: 1}},
@@ -141,6 +142,38 @@ func (m *Mongo) UpsertRaces(sub string, rs []model.Race) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+func (m *Mongo) SaveBundle(sub string, raw []byte) error {
+	c, cancel := ctx()
+	defer cancel()
+	_, err := m.bundles.UpdateByID(c, sub,
+		bson.M{"$set": bson.M{"raw": raw, "updatedAt": time.Now()}}, options.Update().SetUpsert(true))
+	return err
+}
+
+func (m *Mongo) GetBundle(sub string) ([]byte, error) {
+	c, cancel := ctx()
+	defer cancel()
+	var doc struct {
+		Raw []byte `bson:"raw"`
+	}
+	if err := m.bundles.FindOne(c, bson.M{"_id": sub}).Decode(&doc); err != nil {
+		return nil, err
+	}
+	return doc.Raw, nil
+}
+
+func (m *Mongo) BundleUpdatedAt(sub string) (time.Time, error) {
+	c, cancel := ctx()
+	defer cancel()
+	var doc struct {
+		UpdatedAt time.Time `bson:"updatedAt"`
+	}
+	if err := m.bundles.FindOne(c, bson.M{"_id": sub}).Decode(&doc); err != nil {
+		return time.Time{}, err
+	}
+	return doc.UpdatedAt, nil
 }
 
 func (m *Mongo) ListRaces(sub string) ([]model.Race, error) {

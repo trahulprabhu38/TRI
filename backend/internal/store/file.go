@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"garmin-analyzer/internal/model"
 	"garmin-analyzer/internal/strava"
@@ -57,6 +58,22 @@ func (f *FileRepo) UpsertRaces(sub string, rs []model.Race) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+func (f *FileRepo) SaveBundle(sub string, raw []byte) error {
+	return os.WriteFile(filepath.Join(f.u.GarminDir(sub), "live_bundle.json"), raw, 0o600)
+}
+
+func (f *FileRepo) GetBundle(sub string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(f.u.GarminDir(sub), "live_bundle.json"))
+}
+
+func (f *FileRepo) BundleUpdatedAt(sub string) (time.Time, error) {
+	info, err := os.Stat(filepath.Join(f.u.GarminDir(sub), "live_bundle.json"))
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
 }
 
 func (f *FileRepo) ListRaces(sub string) ([]model.Race, error) {
