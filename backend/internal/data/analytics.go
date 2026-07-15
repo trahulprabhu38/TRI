@@ -102,6 +102,22 @@ func ForecastSeries(dates []string, values []float64, days int) []Forecast {
 	return out
 }
 
+// RiegelFatigueFactor is the exponent in Riegel's race-time model, T2 = T1 * (D2/D1)^factor,
+// which captures that pace naturally slows as distance grows even at equal effort/fitness.
+const RiegelFatigueFactor = 1.06
+
+// DistanceAdjustedPace rescales a pace run at distKm to the equivalent pace at refDistKm,
+// using Riegel's formula. This lets races of different lengths (e.g. a 5K and a 10K) be
+// compared on a level footing: raw pace always looks "worse" over longer distances even
+// when the underlying fitness/effort is identical, so comparisons must correct for that
+// before treating a pace difference as an improvement or regression.
+func DistanceAdjustedPace(paceSecKm, distKm, refDistKm float64) float64 {
+	if paceSecKm <= 0 || distKm <= 0 || refDistKm <= 0 {
+		return paceSecKm
+	}
+	return paceSecKm * math.Pow(refDistKm/distKm, RiegelFatigueFactor-1)
+}
+
 func round(f float64, places int) float64 {
 	p := math.Pow(10, float64(places))
 	return math.Round(f*p) / p

@@ -229,7 +229,9 @@ function RaceDetailModal({ race, onClose }) {
 function metricsFor(sport) {
   return [
     { key: 'durationSec', label: 'Finish time', dir: 'low', fmt: (v) => fmtDur(v) },
-    { key: 'avgPaceSecKm', label: 'Pace', dir: 'low', fmt: (v) => fmtSportPace(v, sport) },
+    // Compared via adjustedPaceSecKm (Riegel-scaled to the base race's distance) rather
+    // than the raw value, so a longer race isn't flagged "worse" just for being longer.
+    { key: 'avgPaceSecKm', compareKey: 'adjustedPaceSecKm', label: 'Pace', dir: 'low', fmt: (v) => fmtSportPace(v, sport) },
     { key: 'avgHr', label: 'Avg heart rate', dir: 'low', fmt: (v) => (v ? `${fmtNum(v)} bpm` : '—') },
     { key: 'maxHr', label: 'Max heart rate', dir: null, fmt: (v) => (v ? `${fmtNum(v)} bpm` : '—') },
     { key: 'avgCadence', label: sport === 'swimming' ? 'Stroke rate' : 'Cadence', dir: sport === 'cycling' ? null : 'high', fmt: (v) => (v ? fmtNum(v) : '—') },
@@ -243,18 +245,23 @@ function AnalysisView({ a }) {
   const sport = a.sport
   if (!a.enough) return <Card title="Comparison"><Empty><span className="muted">Select at least two races.</span></Empty></Card>
 
-  const races = a.races
+  // Merge in each race's distance-adjusted pace (from the analyze response's `deltas`,
+  // same order as `races`) so comparisons can use it without touching the raw pace shown.
+  const races = a.races.map((r, i) => ({ ...r, adjustedPaceSecKm: a.deltas?.[i]?.adjustedPaceSecKm ?? r.avgPaceSecKm }))
   const chartData = races.map((r) => ({ date: r.date, pace: r.avgPaceSecKm, time: r.durationSec }))
   const paceFmt = (v) => fmtSportPace(v, sport)
   const metrics = metricsFor(sport).filter((m) => races.some((r) => r[m.key] > 0))
   const base = races[0]
   const color = (i) => RACE_COLORS[i % RACE_COLORS.length]
   const shortName = (r, i) => `${i + 1}. ${r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name}`
+  const cmp = (m, r) => r[m.compareKey || m.key]
 
-  function cellClass(m, value, isFirst) {
-    if (isFirst || !m.dir || !value || !base[m.key]) return ''
-    const better = m.dir === 'low' ? value < base[m.key] : value > base[m.key]
-    const worse = m.dir === 'low' ? value > base[m.key] : value < base[m.key]
+  function cellClass(m, r, isFirst) {
+    const value = cmp(m, r)
+    const baseValue = cmp(m, base)
+    if (isFirst || !m.dir || !value || !baseValue) return ''
+    const better = m.dir === 'low' ? value < baseValue : value > baseValue
+    const worse = m.dir === 'low' ? value > baseValue : value < baseValue
     return better ? 'good' : worse ? 'bad' : ''
   }
 
@@ -306,18 +313,18 @@ function AnalysisView({ a }) {
       </div>
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
-        <Card title="Fastest race">
+        <Card title={a.mixedDistances ? 'Best performance' : 'Fastest race'}>
           <div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{a.best.name}</div>
           <div className="mono" style={{ fontSize: 20, marginTop: 4 }}>{fmtDur(a.best.durationSec)}</div>
-          <div className="muted" style={{ fontSize: 12 }}>{paceFmt(a.best.avgPaceSecKm)}</div>
+          <div className="muted" style={{ fontSize: 12 }}>{paceFmt(a.best.avgPaceSecKm)}{a.mixedDistances ? ' · adjusted for distance' : ''}</div>
         </Card>
         <Card title="Pace trend">
           <div style={{ marginTop: 6 }}><TrendBadge change={a.paceTrend.change} pct={a.paceTrend.percentDiff} lowerIsBetter suffix="s/km" /></div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{a.improved ? 'Getting faster over time' : 'Slowing over time'}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{a.improved ? 'Getting faster over time' : 'Slowing over time'}{a.mixedDistances ? ' (distance-adjusted)' : ''}</div>
         </Card>
         <Card title="Average pace">
           <div className="mono" style={{ fontSize: 20, marginTop: 6 }}>{paceFmt(a.avgPace)}</div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>avg HR {fmtNum(a.avgHr)} bpm</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{a.mixedDistances ? 'distance-adjusted · ' : ''}avg HR {fmtNum(a.avgHr)} bpm</div>
         </Card>
         <Card title="Next-race projection">
           <div className="mono" style={{ fontSize: 20, marginTop: 6 }}>{fmtDur(a.projectedTime)}</div>
@@ -342,14 +349,14 @@ function AnalysisView({ a }) {
             </thead>
             <tbody>
               {metrics.map((m) => {
-                const first = base[m.key]
-                const last = races[races.length - 1][m.key]
+                const first = cmp(m, base)
+                const last = cmp(m, races[races.length - 1])
                 const change = last - first
                 return (
                   <tr key={m.key}>
                     <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--surface)' }}>{m.label}</td>
                     {races.map((r, i) => {
-                      const cls = cellClass(m, r[m.key], i === 0)
+                      const cls = cellClass(m, r, i === 0)
                       return (
                         <td key={r.id} className="mono" style={{ textAlign: 'right' }}>
                           <span className={cls ? `badge ${cls}` : ''}>{m.fmt(r[m.key])}</span>
@@ -370,6 +377,9 @@ function AnalysisView({ a }) {
       </Card>
       <div className="muted" style={{ fontSize: 12, margin: '10px 2px 0' }}>
         Green = improved vs your first selected race · red = regressed. The Change column compares first → last.
+        {a.mixedDistances && (
+          <> Races are different distances, so Pace is judged on a distance-adjusted basis (scaled to {fmtNum(a.refDistanceKm, a.refDistanceKm < 2 ? 2 : 1)}km, your first race's distance) — a slower raw pace on a longer race isn't counted against you.</>
+        )}
       </div>
 
       {/* Multi-metric radar */}
