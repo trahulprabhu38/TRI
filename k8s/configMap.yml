@@ -5,6 +5,11 @@ metadata:
   namespace: tri
 data:
   GOOGLE_CLIENT_ID: 1083733553694-lcm9ggcosfokmq64kr7l3bh28rp3hgdl.apps.googleusercontent.com
-  FRONTEND_URL: http://localhost:5173
+  FRONTEND_URL: http://tri-frontend-svc:5173
   STRAVA_REDIRECT_URI: http://localhost:8080/api/strava/callback
+  MONGO_URI: mongodb://mongo:27017
+  MONGO_DB: garmin
+  REDIS_ADDR: redis:6379
+  GARMIN_SYNC_URL: http://garmin-sync:8000
+
   # OPENAI_MODEL: OPENAI_MODEL

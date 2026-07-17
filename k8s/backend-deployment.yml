@@ -28,7 +28,43 @@ spec:
               configMapKeyRef:
                 name: tri-cm
                 key: GOOGLE_CLIENT_ID
-        
+          - name: FRONTEND_URL
+            valueFrom: 
+              configMapKeyRef: 
+                name: tri-cm
+                key: FRONTEND_URL
+          - name: STRAVA_REDIRECT_URI
+            valueFrom:
+              configMapKeyRef: 
+                key: STRAVA_REDIRECT_URI
+                name: tri-cm
+          - name: MONGO_URI
+            valueFrom: 
+              key: MONGO_URI
+              name: tri-cm
+          - name: MONGO_DB
+            valueFrom: 
+              key: MONGO_DB
+              name: tri-cm
+          - name: REDIS_ADDR
+            valueFrom:
+              key: REDIS_ADDR
+              name: tri-cm
+          - name: GARMIN_SYNC_URL
+            valueFrom:
+              key: GARMIN_SYNC_URL
+              name: tri-cm
+          - name: SESSION_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: tri-secrets
+                key: SESSION_SECRET
+          - name: GOOGLE_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: tri-secrets
+                key: GOOGLE_CLIENT_ID
+
         ports: 
         - containerPort: 8080
         resources:
