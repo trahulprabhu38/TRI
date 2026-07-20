@@ -64,7 +64,6 @@ spec:
               secretKeyRef:
                 name: tri-secrets
                 key: GOOGLE_CLIENT_ID
-
         ports: 
         - containerPort: 8080
         resources:
@@ -93,6 +92,7 @@ spec:
             path: /ready
             port: 8080
           periodSeconds: 5
+
 
 
 ---
