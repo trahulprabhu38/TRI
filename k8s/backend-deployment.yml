@@ -20,7 +20,7 @@ spec:
         role: backend
     spec:
       containers:
-      - image: trahulprabhu38/tri-backend:v0.1
+      - image: trahulprabhu38/tri-backend:v1.0
         name: tri-backend
         env:
           - name: GOOGLE_CLIENT_ID

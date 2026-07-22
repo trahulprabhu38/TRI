@@ -2,28 +2,28 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: tri-frontend
-    role: frontend
-  name: tri-frontend
+    app: garmin-sync
+    role: sync
+  name: garmin-sync
   namespace: tri
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: tri-frontend
-      role: frontend
+      app: garmin-sync
+      role: sync
   strategy: {}
   template:
     metadata:
       labels:
-        app: tri-frontend
-        role: frontend
+        app: garmin-sync
+        role: sync
     spec:
       containers:
-      - image: trahulprabhu38/tri-frontend:v1.0
-        name: tri-frontend
-        ports: 
-        - containerPort: 80
+      - image: trahulprabhu38/tri-garmin-sync:v1.0
+        name: garmin-sync
+        ports:
+        - containerPort: 8000
         resources:
           requests:
             cpu: 64m
@@ -34,24 +34,24 @@ spec:
         startupProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8000
           failureThreshold: 30
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 8000
           initialDelaySeconds: 10
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 80
-          periodSeconds: 5
-
-status: {}
+        volumeMounts:
+          - mountPath: /tokens
+            name: sync-vol
+      volumes:
+        - name: sync-vol
+          persistentVolumeClaim:
+            claimName: tri-sync-pvc
 
 ---
 
@@ -59,16 +59,14 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: tri-frontend-svc
-  name: tri-frontend-svc
+    app: garmin-sync
+  name: garmin-sync
   namespace: tri
 spec:
-  selector:
-    app: tri-frontend
-  type: NodePort
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 80
-
-
+  - port: 8000
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: garmin-sync
+  type: ClusterIP
