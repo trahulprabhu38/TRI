@@ -39,21 +39,25 @@ spec:
                 key: STRAVA_REDIRECT_URI
                 name: tri-cm
           - name: MONGO_URI
-            valueFrom: 
-              key: MONGO_URI
-              name: tri-cm
+            valueFrom:
+              configMapKeyRef:
+                key: MONGO_URI
+                name: tri-cm
           - name: MONGO_DB
-            valueFrom: 
-              key: MONGO_DB
-              name: tri-cm
+            valueFrom:
+              configMapKeyRef:
+                key: MONGO_DB
+                name: tri-cm
           - name: REDIS_ADDR
             valueFrom:
-              key: REDIS_ADDR
-              name: tri-cm
+              configMapKeyRef:
+                key: REDIS_ADDR
+                name: tri-cm
           - name: GARMIN_SYNC_URL
             valueFrom:
-              key: GARMIN_SYNC_URL
-              name: tri-cm
+              configMapKeyRef:
+                key: GARMIN_SYNC_URL
+                name: tri-cm
           - name: SESSION_SECRET
             valueFrom:
               secretKeyRef:
